@@ -1,0 +1,523 @@
+/* -------------------------------------------------------------------
+Functions:
+Add New Player
+Select Players
+Score
+Send Result
+Notes
+Reset
+
+Hidden Fields:
+
+Start:
+D3 - Navne last entry
+
+1og2:
+C3 - Game count (Link from Spil!F11)
+
+SPIL:
+E5 - Score series 1
+F5 - Checkbox for Player's turn: 1=FALSE, 2=TRUE
+G5 - Score series 2
+E27 - Score vs Lukketal
+G27 - Vinder Found
+
+C19: Score 1
+H19: Score 2
+
+-------------------------------------------------------------------*/
+
+var ss = SpreadsheetApp.getActiveSpreadsheet();   // Spreadsheet object
+var x=1;   // Language selector
+
+//var s2 = SpreadsheetApp.getActiveSpreadsheet().getUrl();
+//var xs = SpreadsheetApp.getActiveSheet().getName();
+//msgO2('do1og2goSpil','ss='+ss+'\\ns2='+s2+'\\nxs='+xs);
+var w=false;                                    // Winnerindicator
+
+//  SpreadsheetApp.setActiveSheet(ss.getSheets()[2]);
+
+
+
+// ----------------------------------------------------------------------------------
+function onOpen() {
+// Menu for English/Danish x=0/1
+
+  var xStart    =["Start",         "begynde"];
+  var xPlayerAdd=["Add New Player","Tilføj ny afspiller"];
+  var xPlayerSel=["Select Players","Vælg afspillere"];
+  var xScore    =["Score",         "Score"];
+  var xTally    =["Tally",         "Tælle"];
+  var xSend     =["Send Result",   "Send resultat"];
+  var xNotes    =["Notes",         "Noter"];
+  var xReset    =["Reset",         "Nulstil"];
+  
+  var mStart    =xStart[x];
+  var mPlayerAdd=xPlayerAdd[x];
+  var mPlayerSel=xPlayerSel[x];
+  var mScore    =xScore[x];
+  var mTally    =xTally[x];
+  var mSend     =xSend[x];
+  var mNotes    =xNotes[x];
+  var mReset    =xReset[x];
+// msgO2("Welcome!","x="+x+"\\nmStart="+mStart+"\\nmPlayerAdd="+xPlayerAdd[0]);
+
+  SpreadsheetApp.getUi()
+      .createMenu('Silkeborg')
+      .addItem(mStart,    'goStart')
+      .addItem(mPlayerAdd,'goNavne')
+      .addSeparator()
+      .addItem(mPlayerSel,'go1og2')
+      .addSeparator()
+      .addItem(mScore,    'goSpil')
+      .addSeparator()
+      .addItem(mTally,    'goTally')
+      .addItem(mSend,     'goResultat')
+      .addItem(mNotes,    'goNoter')
+      .addSeparator()
+      .addItem(mReset,    'doReset')
+      .addToUi();
+
+// Activate after dev
+// msgOk("Welcome!",'Scoring System at your service.\\nIt\'s showtime!');
+}
+// ----------------------------------------------------------------------------------
+
+
+// ----------------------------------------------------------------------------------
+function onEdit(e){
+  var sheet  = e.source.getActiveSheet().getName(); // Sheet updated
+  var cell   = e.range.getA1Notation();             // Cell that was updated
+  var oldVal = e.oldValue; if(oldVal==undefined){oldVal='';}
+  var val    = e.value;
+  var sh     = SpreadsheetApp.getActiveSheet();
+//  msgOk('sh='+sh+'sheet='+sheet);
+//  msgO2('onEdit', 'sheet ='+sheet+'\\ncell  ='+cell+'\\nold Val  ='+oldVal+'\\nVal  ='+val);
+//  msgO2('onEdit', 'sheet ='+sheet+'\\nsource='+source+'\\nrange ='+range+'\\ncolumn='+column+'\\nrow   ='+row+'\\ncell  ='+cell);
+
+  // Process for Spil
+  if(sheet=='Spil'){
+// msgO2('Score','Do Scoring');
+    doSpil(sh,cell,val,oldVal);
+  } else if(sheet=='1. og 2. spiller'){
+    do1og2(sh,cell,val,oldVal);
+  } else if(sheet=='Start'){
+    doStart(sh,cell,val,oldVal);
+  } // else { msgO2('Other','For other edits...');}
+}
+// ----------------------------------------------------------------------------------
+
+
+// ----------------------------------------------------------------------------------
+function doSpil(sh,cell,val,oldVal){
+// Process SPIL sheet entries
+//  msgO2('doSpil','cell: '+cell+'\\nval: '+val+'\\noldVal: '+oldVal);
+
+  // Validate updated cell
+  // If other cells, confirm undo
+  var xCell = ["C19", "H19"]; // Allowed cells update
+  var x1or2   = xCell.indexOf(cell);
+  if(x1or2==-1){                // Prompt to undo if not on list
+//  msgO2('Spil: ','Was in, ind='+ind);
+    doUndo('score',cell,val,oldVal);
+    return;
+  }
+//  msgO2('Spil: ','Passed, ind='+ind);
+  doScore(sh,cell,val,x1or2);
+}
+// ----------------------------------------------------------------------------------
+
+
+// ----------------------------------------------------------------------------------
+function doScore(sh,cell,val,x1or2){
+// Process Player's score
+//  msgO2('doScore','sh='+sh+'\\nxcell='+cell+'\\nval='+val+'\\nx1or2='+x1or2);
+
+  // Get common values
+  var xTurn    = sh.getRange('F5').getValue();
+  var xCount   = sh.getRange('F11').getValue();
+  if(xCount==0){xCount=1;sh.getRange('F11').setValue(xCount);}
+//  msgO2('doScore','sh='+sh+'\\nxcell='+cell+'\\nx1or2='+x1or2);
+
+  // Validate: Even score continue, return if odd
+  if(isEven(val)==false){
+    sh.getRange(cell).activate();
+    return;
+  }
+
+  // Retrieve values
+  if(x1or2==0 && xTurn==false || x1or2==1 && xTurn==true){
+    var xTotal0  = [sh.getRange('C13').getValue(), sh.getRange('H13').getValue()];
+    var xScore0  = [sh.getRange('C19').getValue(), sh.getRange('H19').getValue()];
+    var xSeries0 = [sh.getRange('E5').getValue(),  sh.getRange('G5').getValue()];
+    var xLuk0    = [sh.getRange('C11').getValue(), sh.getRange('H11').getValue()];
+    var xRange0  = ['E5', 'G5'];
+    var xCtotal0 = ['C13', 'H13'];
+  } else {
+    msgO2('Warning!','Score input on wrong player.\\n\\nPlease score for correct player.');
+    return;
+  }
+/*
+  msgO2('doScore retrieve','x1or2='+x1or2+
+                          '\\ncell ='+cell+
+                          '\\nxTotal0 ='+xTotal0[x1or2]+
+                          '\\nxScore0 ='+xScore0[x1or2]+
+                          '\\nxSeries0='+xSeries0[x1or2]+
+                          '\\nxLuk0='+xLuk0[x1or2]+
+                          '\\nxSeries0+='+xSeries0[x1or2] + xScore0[x1or2] +';'+
+                          '\\nxTotal0+='+xTotal0[x1or2]  + xScore0[x1or2]+
+                          '\\nxRange0='+xRange0[x1or2]);
+*/
+
+  // Evaluate for winner
+  xTotal0[x1or2] = xTotal0[x1or2] + xScore0[x1or2];
+  if(xTotal0[x1or2] == xLuk0[x1or2]){
+    var xNm0 = [sh.getRange('C8').getValue(), sh.getRange('H8').getValue()];
+    msgO2(xNm0[x1or2],'Tillykke - vi har en vinder! \\n\\nKlik på [OK] og derefter [Nulstil] for nyt spil');
+  }
+
+  // Evaluate for score > Luk, if so, return
+  if(xTotal0[x1or2] > xLuk0[x1or2]){
+    msgO2('Warning!','Total score is more than closing number.\\n\\nPlease score only for total to be equal or less than closing number.');
+    sh.getRange(cell).activate();
+    return;
+  }
+
+  // Update score and series display
+  sh.getRange(xRange0[x1or2]).setValue(xSeries0[x1or2] + xScore0[x1or2] +';');  // Series
+  sh.getRange(xCtotal0[x1or2]).setValue(xTotal0[x1or2]);                        // Score
+//  if(xTotal0[x1or2] == xLuk0[x1or2]){return;}                                 // If winner found, return
+
+  // Clear score
+  sh.getRange(cell).setValue('');         // Clear current score display
+//  msgO2('doScore Clear','x1or2 ='+x1or2+'xOther ='+xOther);
+
+  // If winner, activate cell and return else toggle turn switch and increment game count
+  if(xTotal0[x1or2] == xLuk0[x1or2])
+  {sh.getRange(cell).activate();return;
+  } else {
+    var xOther='H19'; 
+    if(x1or2==1){xCount=xCount+1;xOther='C19';} // Increment game count and toggle scorebox to activate
+    sh.getRange(xOther).activate();             // Activate scorebox
+    xTurn = !xTurn;                             // Toggle switch
+    sh.getRange('F5').setValue(xTurn);          // Toggle player's turn if no winner yet
+    sh.getRange('F11').setValue(xCount);        // Update display for game count
+  }
+}
+
+function isEven(value){
+// If odd, warn and re-activate scorebox to re-enter score
+  if (value%2 != 0){
+    msgO2('Warning!','Score that is odd number is not acceptable.\\nPlease replace score with even number.');
+    return false;
+  }
+//  return true;
+}
+// ----------------------------------------------------------------------------------
+
+
+
+// ----------------------------------------------------------------------------------
+function do1og2(sh,cell,val,oldVal){
+  // Validate players and lukettal
+//   msgO2('do1og2val','sh/cell/val/oldVal='+sh+' / '+cell+' / '+val+' / '+oldVal);
+
+  var xCell = ["C9","C12","G9","G12"]; // Allowed cells update
+  var ind   = xCell.indexOf(cell);
+  if(ind==-1){                         // Prompt to undo if cell update not on list
+    doUndo('names and Brug LT',cell,oldVal,oldVal);
+    return;
+  }
+
+  // Validate for different players and Lukketal > 0
+  var x = do1og2validate(sh,val,oldVal);
+  if(x=='false') return;
+}
+
+function do1og2validate(sh,val,oldVal){
+// Check for duplicate name, 0 Lukketal and game count
+//   msgO2('do1og2val','sh/val/oldVal='+sh+' / '+val+' / '+oldVal);
+
+  // Retrieve current values
+  var x=sh.getRange('C9').getValue();       // Player 1
+  var y=sh.getRange('C12').getValue();      // Player 2
+  var a=sh.getRange('E9').getValue();       // Lukketal
+  var b=sh.getRange('G9').getValue();       // Brug LT 1
+  var c=sh.getRange('E12').getValue();      // Lukketal
+  var d=sh.getRange('G12').getValue();      // Brug LT 2
+  var g=sh.getRange('C3').getValue();       // Game count
+//  msgO2('do1og2goSpil','Blanks?\\n\\nx='+x+'\\ny='+y+'\\nabcd='+a+'\\nb='+b+'\\nc='+c+'\\nd='+d);
+
+  // Check for duplicate names
+  if(x==y && x!=''){
+    response=msgO2('Warning!','Duplicate player names.\\n\\nPlayer 2 will be cleared.\\nPlease select different player name.');
+    sh.getRange('C12').setValue('');        // Player 2
+    return false;
+  }
+
+  // Validate for Lukettal > 0
+  if((x!='' && a+b==0) || (y!='' && c+d==0)){
+    response=msgO2('Warning!','Player have 0 Lukketal.\\n\\nPlease update player\'s Lukketal or enter Brug LT.');
+    return false;
+  }
+
+  // Confirm players change after game 1
+  if(g>0 && val!='x'){                                  // Game started
+//   msgO2('do1og2val','g/val/oldVal='+g+' / '+val+' / '+oldVal);
+    response    =  msgOc('Confirm:','Changing player on game '+g+':\\n\\n'+oldVal+'\\nto\\n'+val+'\\n\\nAre you sure?');
+    if(response == 'cancel'){return false;}
+  }
+}
+
+function do1og2goSpil(){
+// From Spil button of do1og2
+//  msgO2('do1og2goSpil','Here...');
+
+  var sh = SpreadsheetApp.getActiveSheet();
+  // Get names for dialog box
+  var x=sh.getRange('C9').getValue();       // Player 1
+  var y=sh.getRange('C12').getValue();      // Player 2
+
+  // Validate for blank names
+  if(x=='' || y==''){
+    var p=1;var q='C9';                     // Player# and cell location
+    if(y=='') {p=2;q='C12'};
+    response=msgO2('Warning!','Blank names not allowed.\\n\\nBlank name will be selected to choose player.\\nPlease select a name for player '+p+'.');
+    sh.getRange(q).activate();
+    return false;
+  }
+
+  // Validate for Lukketal
+  var z = do1og2validate(sh,'x','y');       // Pass any parameter to indicate from button
+  if(z==false) return;
+//  msgO2('do1og2goSpil','Here...'+x);
+
+  // Confirm starting game
+  response=msgOc('Confirm:','Activate Spil for game 1 of players:\\n\\n'+x+'\\n vs \\n'+y+'\\n\\nAre you sure?');
+  if(response=='cancel'){return false;}
+//  msgO2('do1og2goSpil','ss');
+
+  // Activate Spil, set game count to 1
+  SpreadsheetApp.setActiveSheet(ss.getSheets()[2]);
+  var sh = SpreadsheetApp.getActiveSheet();
+  var x=sh.getRange('F11').getValue();      // Get game count
+  if(x==0){sh.getRange('F11').setValue(1);} // Start with game count 1
+  sh.getRange('C19').activate();            // Activate Spil tab, player 1 score cell
+}
+// ----------------------------------------------------------------------------------
+
+
+// ----------------------------------------------------------------------------------
+function doStart(cell,val,oldVal){
+  // Validate for any update, non allowed
+//  msgO2('doStart','cell: '+cell+'\\nval: '+val+'\\noldVal: '+oldVal);
+    doUndo('none',cell,val,oldVal);
+    return;
+}
+// ----------------------------------------------------------------------------------
+
+
+// ----------------------------------------------------------------------------------
+function doReset(){
+  // Confirm reset
+  response=msgOc('Confirm:','Clear entries to start new game.\\nAre you sure?');
+  if(response=='cancel'){return;}
+
+  // Set active sheet to Spil
+  // Clear scores, names and setup for new game
+  SpreadsheetApp.setActiveSheet(ss.getSheets()[2]);
+  var sh = SpreadsheetApp.getActiveSheet();
+  sh.getRange('C19').setValue('');     // score 1
+  sh.getRange('H19').setValue('');     // score 2
+  sh.getRange('C13').setValue(0);      // total 1
+  sh.getRange('H13').setValue(0);      // total 2
+  sh.getRange('E5').setValue('');      // score series 1
+  sh.getRange('F5').setValue('false'); // 1=false, 2=true
+  sh.getRange('G5').setValue('');      // score series 2
+  sh.getRange('F11').setValue(0);      // Turns
+
+  // 1of2
+  SpreadsheetApp.setActiveSheet(ss.getSheets()[1]);
+  var sh = SpreadsheetApp.getActiveSheet();
+  sh.getRange('C12').setValue('');
+  sh.getRange('G12').setValue('');
+  sh.getRange('G9').setValue('');
+  sh.getRange('C9').setValue('');
+  sh.getRange('C9').activate();
+}
+// ----------------------------------------------------------------------------------
+
+
+function goStart(){
+// Have to create function so it can be accessed from menu or button
+  goSheet(0,'C10');
+}
+
+function go1og2(){
+  goSheet(1,'C9');
+}
+
+function goSpil(){
+  goSheet(2,'C19');
+}
+
+function goTally(){
+  goSheet(3,'A1');
+}
+
+function goResultat(){
+  goSheet(4,'A1');
+}
+
+function goNavne(){
+// Got to Navne's last row using cell ref from Start!D3
+
+  var sh = SpreadsheetApp.getActiveSheet();
+//  var x = sh.getRange('Start!D3').getValue();     // After last entry
+  goSheet(5,'B1');
+
+  var lastRow = sh.getLastRow();
+  msgOk('Last row: '+lastRow);
+  
+
+
+}
+
+function goNoter(){
+  goSheet(6,'A1');
+}
+
+
+
+
+
+/* --------------------------------------------------
+// Libraries SBC
+ --------------------------------------------------*/
+
+function doUndo(x,cell,val,oldVal){
+//  msgO2('doUndo:','Was in...');
+  var response=msgOc('Warning!','Please update only '+x+'.\\n'+
+                     'Other update (cell '+cell+') new/previous values:\\n'+
+                     val+'/'+oldVal+'\\n\\n'+
+                     'To go back to spreadsheet, click:\\n'+
+                     '[Ok] to accept new value\\n'+
+                     '[Cancel] to restore previous value.');
+  if(response=='cancel'){
+//      msgO2('Other Update','Restore previous value here...');
+    SpreadsheetApp.getActiveSheet().getRange(cell).setValue(oldVal);
+  }
+}
+
+
+
+
+/* --------------------------------------------------
+Libraries Global
+ --------------------------------------------------*/
+
+function msgOk(x){
+Browser.msgBox(x, Browser.Buttons.OK);
+}
+
+function msgO2(x,y){
+Browser.msgBox(x,y, Browser.Buttons.OK);
+}
+
+function msgOc(x,y){
+  response = Browser.msgBox(x, y, Browser.Buttons.OK_CANCEL);
+  return(response);
+}
+
+function goSheet(num,range){
+  SpreadsheetApp.setActiveSheet(ss.getSheets()[num]);
+  var sh = SpreadsheetApp.getActiveSheet();
+  sh.getRange(range).activate();
+}
+
+function getLastRow(x){
+  SpreadsheetApp.setActiveSheet(ss.getSheets()[x]);
+  var sh = SpreadsheetApp.getActiveSheet();
+  var lastRow = sh.getLastRow();
+  return lastRow;
+}
+
+/* --------------------------------------------------
+Translations
+ --------------------------------------------------*/
+
+/*
+var mStart    =["Start","Start"];
+var mPlayerAdd=["Add New Player","Tilføj ny afspiller"]
+var mPlayerSel=["Select Players","Vælg afspillere"]
+var mScore    =["Score","Score"]
+var mSend     =["Send Result","Send resultat"]
+var mNotes    =["Notes","Noter"]
+var mReset    =["Reset","Nulstil"]
+
+
+["English","Danish"]
+
+["Menu","Menu"]
+["Start",         "begynde"]
+["Add New Player","Tilføj ny afspiller"]
+["Select Players","Vælg afspillere"]
+["Score",         "Score"]
+["Send Result",   "Send resultat"]
+["Notes",         "Noter"]
+["Reset",         "Nulstil"]
+
+["Dialog boxes","Dialogbokse"]
+["Warning",                                 "Advarsel"]
+["Confirm",                                 "Bekræfte"]
+["Are you sure?",                           "Er du sikker?"]
+["Select players",                          "Vælg spillere"]
+["Blank names not allowed",                 "Blank navne er ikke tilladt"]
+["Blank name will be selected",             "Blank navn vil blive valgt"]
+["Duplicate player names",                  "Dupliker afspillers navne"]
+["Please select a name for player",         "Vælg venligst et navn til afspilleren"]
+["Player 2 will be cleared",                "Spiller 2 bliver ryddet"]
+["Please select different player name",     "vælg venligst forskellige afspillers navn"]
+["Activate Spil for game 1 of players",     "Aktivér Spil til spil 1 af spillere"]
+["Congratulations - we have a winner!",     "Tillykke - vi har en vinder!"]
+["Click [OK] and then [Reset] for new game","Klik på [OK] og derefter [Nulstil] for nyt spil"]
+["Clear entries to start new game",         "Ryd indtastninger for at starte nyt spil"]
+["Only even number",                        "Kun lige antal"]
+["It's another player's turn",              "Det er en anden spiller tur"]
+['Total score is more than closing number', 'Samlet score er mere end lukketal']
+['Please score only for equal or less than closing number','Vær venlig at score kun for hele eller mindre end lukketal']
+['Score input on wrong player','Score indtastning på forkert spiller']
+['Please score for correct player','Vær venlig at score for korrekt spiller']
+["",                       ""]
+["",                       ""]
+
+
+
+
+
+
+var ss   = SpreadsheetApp.getActiveSpreadsheet();   // Spreadsheet object
+var ssId = SpreadsheetApp.getActiveSpreadsheet().getId();
+var ss   = SpreadsheetApp.openById("???");
+var data = Range.getCell(0, 0);
+var sheet = ss.getSheetByName('Sheet1'); // or whatever is the name of the sheet 
+var range = sheet.getRange(1,1); 
+var data = range.getValue();
+sh.getCurrentCell().offset(1, 1).activate();
+
+
+// Appends a new row with 3 columns to the bottom of the
+// spreadsheet containing the values in the array
+var ss = SpreadsheetApp.getActiveSpreadsheet();
+var sheet = ss.getSheets()[0];
+sheet.appendRow(["a man", "a plan", "panama"]);
+// Returns the active cell in this sheet.
+var cell = sheet.getActiveCell();
+
+// This logs the value in the very last cell of this sheet
+var lastRow = sheet.getLastRow();
+var lastColumn = sheet.getLastColumn();
+var lastCell = sheet.getRange(lastRow, lastColumn);
+
+
+*/
